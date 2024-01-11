@@ -8,8 +8,23 @@ import * as fastpng from 'fast-png'
 //function decode (arrayBuffer, byteOffset, byteLength, outputChannels) {
 
 class QOICustomDocument implements vscode.CustomDocument {
-	constructor (public uri: vscode.Uri) { }
+	statusBarItem: vscode.StatusBarItem;
+	base: string;
+
+	constructor (public uri: vscode.Uri) {
+		let bytes = fs.readFileSync(this.uri.fsPath);
+		const KB = bytes.byteLength / 1024;
+		let info = QOI.decode(bytes, 0, bytes.byteLength, 4) as {width:number,height:number,colorspace:number,channels:number,data:Uint8Array}
+		let obytes = fastpng.encode(info, { zlib: { level: 1 } })
+		let base = Buffer.from(obytes).toString('base64');
+		this.base = base
+
+		this.statusBarItem = vscode.window.createStatusBarItem('qoi_size', vscode.StatusBarAlignment.Right, 0)
+		this.statusBarItem.text = `${info.width}x${info.height}     ${KB|0}KB`
+		this.statusBarItem.show()
+	}
 	dispose(): void {
+		this.statusBarItem.hide()
 	}
 
 }
@@ -28,17 +43,10 @@ class QOIImageEditorProvider implements vscode.CustomReadonlyEditorProvider<QOIC
 	resolveCustomEditor(document: QOICustomDocument, webviewPanel: vscode.WebviewPanel, token: vscode.CancellationToken): void | Thenable<void> {
 		//throw new Error(`Error[1]: ${document}`);
 		try {
-			let bytes = fs.readFileSync(document.uri.fsPath);
-			
-			let info = QOI.decode(bytes, 0, bytes.byteLength, 4) as {width:number,height:number,colorspace:number,channels:number,data:Uint8Array}
-
-			let obytes = fastpng.encode(info, { zlib: { level: 1 } })
-			let base = Buffer.from(obytes).toString('base64');
-
 			webviewPanel.webview.html = `
 				<html>
 				<body>
-				<img src="data:image/png;base64,${base}" />
+				<img src="data:image/png;base64,${document.base}" />
 				</body>
 				</html>
 			`
